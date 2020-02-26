@@ -65,7 +65,7 @@ Some values of options specified in the project config may be overridden by tag 
 :   One or more IDs of nodes in the Figma file. May be specified as a list or as a comma-separated string.
 
 `scale`, `format`, `svg_include_id`, `svg_simplify_stroke`, `use_absolute_bounds`, `version`
-:   Query parameters to use in Figma API requests, see descriptions in [https://www.figma.com/developers/api#get-images-endpoint](Figma API documentation).
+:   Query parameters to use in Figma API requests, see descriptions in [Figma API documentation](https://www.figma.com/developers/api#get-images-endpoint).
 
 ## Usage
 
