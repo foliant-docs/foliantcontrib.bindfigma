@@ -12,6 +12,7 @@ from hashlib import md5
 from subprocess import run, PIPE, STDOUT, CalledProcessError
 from urllib import request
 from urllib.error import HTTPError
+from urllib.parse import quote
 from typing import Dict
 OptionValue = int or float or bool or str
 
@@ -22,8 +23,8 @@ class Preprocessor(BasePreprocessor):
     defaults = {
         'cache_dir': Path('.bindfigmacache'),
         'convert_path': 'convert',
-        'resize': None,
         'caption': '',
+        'resize': None,
         'access_token': None,
         'file_key': None,
         'ids': None,
@@ -182,7 +183,7 @@ class Preprocessor(BasePreprocessor):
         if isinstance(api_request_params['ids'], list):
             api_request_params['ids'] = ','.join(api_request_params['ids'])
 
-        api_request_url += '?ids=' + api_request_params.pop('ids')
+        api_request_url += '?ids=' + quote(api_request_params.pop('ids'), encoding='utf-8', safe='%')
 
         for param_name in api_request_params.keys():
             if api_request_params[param_name]:
@@ -213,15 +214,15 @@ class Preprocessor(BasePreprocessor):
             self.logger.debug(f'Image ID: {image_id}, image URL: {image_url}')
 
             if image_url:
-                resized_image_width = options.get('resize', None) or self.options['resize']
-                format = options.get('format', None) or self.options['format'] or 'png'
-
                 caption = options.get('caption', None)
 
                 if caption is None:
                     caption = self.options['caption']
 
                 caption = caption.replace('{{image_id}}', image_id)
+
+                resized_image_width = options.get('resize', None) or self.options['resize']
+                format = options.get('format', None) or self.options['format'] or 'png'
 
                 image_path = self._download_and_resize(image_url, resized_image_width, format)
 
