@@ -16,6 +16,7 @@ from urllib.parse import quote
 from typing import Dict
 OptionValue = int or float or bool or str
 
+from foliant.utils import output
 from foliant.preprocessors.base import BasePreprocessor
 
 
@@ -24,6 +25,8 @@ class Preprocessor(BasePreprocessor):
         'cache_dir': Path('.bindfigmacache'),
         'convert_path': 'convert',
         'caption': '',
+        'hyperlinks': True,
+        'multi_delimeter': '\n\n',
         'resize': None,
         'access_token': None,
         'file_key': None,
@@ -105,7 +108,11 @@ class Preprocessor(BasePreprocessor):
                 self.logger.debug('Response data written to the file')
 
             else:
-                self.logger.error('Error occured while downloading the image')
+                error_message = f'Failed to download the image, URL: {image_url}'
+
+                output(error_message, self.quiet)
+
+                self.logger.error(error_message)
 
                 return None
 
@@ -135,7 +142,11 @@ class Preprocessor(BasePreprocessor):
                     run(command, shell=True, check=True, stdout=PIPE, stderr=STDOUT)
 
                 except CalledProcessError as exception:
-                    self.logger.error(str(exception))
+                    error_message = f'Failed to perform resize: {str(exception)}'
+
+                    output(error_message, self.quiet)
+
+                    self.logger.error(error_message)
 
                     return None
 
@@ -148,6 +159,7 @@ class Preprocessor(BasePreprocessor):
 
     def _process_figma(self, options: Dict[str, OptionValue]) -> str:
         api_request_params = {}
+        downloaded_image_params = {}
 
         for option_name in self.options.keys():
             if option_name in [
@@ -161,7 +173,26 @@ class Preprocessor(BasePreprocessor):
                 'use_absolute_bounds',
                 'version'
             ]:
-                api_request_params[option_name] = options.get(option_name, None) or self.options[option_name]
+                if options.get(option_name, None) is not None:
+                    api_request_params[option_name] = options[option_name]
+
+                else:
+                    api_request_params[option_name] = self.options[option_name]
+
+            elif option_name in [
+                'caption',
+                'hyperlinks',
+                'multi_delimeter',
+                'resize'
+            ]:
+                if options.get(option_name, None) is not None:
+                    downloaded_image_params[option_name] = options[option_name]
+
+                else:
+                    downloaded_image_params[option_name] = self.options[option_name]
+
+        downloaded_image_params['format_extension'] = api_request_params['format'] or 'png'
+        downloaded_image_params['file_key'] = api_request_params['file_key']
 
         self.logger.debug(f'Figma definition found. API request parameters: {api_request_params}')
 
@@ -172,7 +203,11 @@ class Preprocessor(BasePreprocessor):
             and
             api_request_params['ids']
         ):
-            self.logger.error('Ignoring: access_token, file_key, and ids must be specified')
+            error_message = 'Error: access_token, file_key, or ids not specified, skipping'
+
+            output(error_message, self.quiet)
+
+            self.logger.error(error_message)
 
             return ''
 
@@ -190,7 +225,7 @@ class Preprocessor(BasePreprocessor):
                 api_request_url += f'&{param_name}={api_request_params[param_name]}'
 
         self.logger.debug(
-            f'Calling Figma API to get images URLs, {api_request_url}, custom header: {token_header}'
+            f'Calling Figma API to get images URLs, URL: {api_request_url}, custom header: {token_header}'
         )
 
         api_response = self._http_request(api_request_url, 'GET', token_header)
@@ -202,43 +237,58 @@ class Preprocessor(BasePreprocessor):
         self.logger.debug(f'Response data: {api_response_data}')
 
         if api_response['status'] != 200 or api_response_data.get('err', None):
-            self.logger.error('Error occurred while performing API request')
+            error_message = f'Failed to perform API request, URL: {api_request_url}'
+
+            output(error_message, self.quiet)
+
+            self.logger.error(error_message)
 
             return ''
 
-        output = ''
+        self.logger.debug(f'Parameters to apply to downloaded image: {downloaded_image_params}')
 
-        for index, image_id in enumerate(api_response_data['images'].keys()):
+        image_references = []
+
+        for image_id in api_response_data['images'].keys():
             image_url = api_response_data['images'][image_id]
 
             self.logger.debug(f'Image ID: {image_id}, image URL: {image_url}')
 
             if image_url:
-                caption = options.get('caption', None)
-
-                if caption is None:
-                    caption = self.options['caption']
-
-                caption = caption.replace('{{image_id}}', image_id)
-
-                resized_image_width = options.get('resize', None) or self.options['resize']
-                format = options.get('format', None) or self.options['format'] or 'png'
-
-                image_path = self._download_and_resize(image_url, resized_image_width, format)
+                image_path = self._download_and_resize(
+                    image_url,
+                    downloaded_image_params['resize'],
+                    downloaded_image_params['format_extension']
+                )
 
                 if image_path:
-                    if index > 0:
-                        output += '\n'
+                    caption = downloaded_image_params['caption'].replace('{{image_id}}', image_id)
+                    image_reference = f'![{caption}]({image_path})'
 
-                    output += f'![{caption}]({image_path})'
+                    if downloaded_image_params['hyperlinks']:
+                        image_reference = (
+                            '[' + image_reference + '](https://www.figma.com/file/' +
+                            downloaded_image_params['file_key'] +
+                            '/?node-id=' + quote(image_id, encoding='utf-8', safe='%') + ')'
+                        )
+
+                    image_references.append(image_reference)
 
                 else:
-                    self.logger.error('No path for the image, skipping')
+                    error_message = f'Failed to get path for the image, URL: {image_url}'
+
+                    output(error_message, self.quiet)
+
+                    self.logger.error(error_message)
 
             else:
-                self.logger.error('No URL for the image, skipping')
+                error_message = f'Failed to get URL for the image, ID: {image_id}'
 
-        return output
+                output(error_message, self.quiet)
+
+                self.logger.error(error_message)
+
+        return downloaded_image_params['multi_delimeter'].join(image_references)
 
     def process_figma(self, markdown_content: str) -> str:
         def _sub(figma_definition) -> str:

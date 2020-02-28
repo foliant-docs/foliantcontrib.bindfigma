@@ -29,6 +29,8 @@ preprocessors:
         cache_dir: !path .bindfigmacache
         convert_path: convert
         caption: ''
+        hyperlinks: true
+        multi_delimeter: '\n\n'
         resize: null
         access_token: null
         file_key: null
@@ -51,6 +53,12 @@ Some values of options specified in the project config may be overridden by tag 
 
 `caption`
 :   Caption of images. The `{{image_id}}` placeholder in the caption will be replaced with Figma node ID.
+
+`hyperlinks`
+:   Flag that tells the preprocessor to wrap image references into hyperlinks to related Figma URLs.
+
+`multi_delimeter`
+:   String that should separate multiple image references.
 
 `resize`
 :   Width of resulting images in pixels. If not specified, resizing is not performed.
@@ -79,4 +87,4 @@ Here’s an image from Figma:
 
 You may use tag attributes to override the values of the project config options with the same names. All the options excepting `cache_dir` and `convert_path` may be overridden in this way.
 
-BindFigma preprocessor will replace such statements with local image references. If `ids` refers to more than one image, a set of image references will be generated.
+BindFigma preprocessor will replace such statements with local image references. If `ids` refers to more than one image, a set of image references will be generated. Multiple image references will be separated with the string specified as `multi_delimeter`.
