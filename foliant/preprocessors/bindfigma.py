@@ -7,6 +7,7 @@ and binds them with the documentation project.
 
 import re
 import json
+from os import getenv
 from pathlib import Path
 from hashlib import md5
 from subprocess import run, PIPE, STDOUT, CalledProcessError
@@ -23,6 +24,7 @@ from foliant.preprocessors.base import BasePreprocessor
 class Preprocessor(BasePreprocessor):
     defaults = {
         'cache_dir': Path('.bindfigmacache'),
+        'api_caching': 'disabled',
         'convert_path': 'convert',
         'caption': '',
         'hyperlinks': True,
@@ -108,7 +110,7 @@ class Preprocessor(BasePreprocessor):
                 self.logger.debug('Response data written to the file')
 
             else:
-                error_message = f'Failed to download the image, URL: {image_url}'
+                error_message = f'Failed to download the image, URL: {image_url}, source: {self.markdown_file_path}'
 
                 output(error_message, self.quiet)
 
@@ -142,7 +144,7 @@ class Preprocessor(BasePreprocessor):
                     run(command, shell=True, check=True, stdout=PIPE, stderr=STDOUT)
 
                 except CalledProcessError as exception:
-                    error_message = f'Failed to perform resize: {str(exception)}'
+                    error_message = f'Failed to perform resize: {str(exception)}, source: {self.markdown_file_path}'
 
                     output(error_message, self.quiet)
 
@@ -203,7 +205,10 @@ class Preprocessor(BasePreprocessor):
             and
             api_request_params['ids']
         ):
-            error_message = 'Error: access_token, file_key, or ids not specified, skipping'
+            error_message = (
+                'Error: access_token, file_key, or ids not specified, skipping; ' +
+                f'source: {self.markdown_file_path}'
+            )
 
             output(error_message, self.quiet)
 
@@ -225,25 +230,53 @@ class Preprocessor(BasePreprocessor):
                 api_request_url += f'&{param_name}={api_request_params[param_name]}'
 
         self.logger.debug(
-            f'Calling Figma API to get images URLs, URL: {api_request_url}, custom header: {token_header}'
+            f'Figma API to get images URLs, URL: {api_request_url}, custom header: {token_header}'
         )
 
-        api_response = self._http_request(api_request_url, 'GET', token_header)
+        api_request_hash = md5(api_request_url.encode())
+        api_request_hash.update(str(token_header).encode())
+        api_response_cache_path = self._cache_dir_path / f'api_response_{api_request_hash.hexdigest()}.json'
 
-        api_response_data = json.loads(api_response['data'].decode('utf-8'))
+        if api_response_cache_path.exists() and (
+            self.options['api_caching'] == 'enabled' or (
+                self.options['api_caching'] == 'env' and getenv('FOLIANT_FIGMA_CACHING') is not None
+            )
+        ):
+            self.logger.debug('API responses caching is switched on, response data found in cache')
 
-        self.logger.debug(f'Response received, status: {api_response["status"]}')
-        self.logger.debug(f'Response headers: {api_response["headers"]}')
-        self.logger.debug(f'Response data: {api_response_data}')
+            with open(api_response_cache_path, encoding='utf8') as api_response_cache:
+                api_response_data = json.load(api_response_cache)
 
-        if api_response['status'] != 200 or api_response_data.get('err', None):
-            error_message = f'Failed to perform API request, URL: {api_request_url}'
+            self.logger.debug(f'API response data restored from cache: {api_response_data}')
 
-            output(error_message, self.quiet)
+        else:
+            self.logger.debug('Performing API request')
 
-            self.logger.error(error_message)
+            api_response = self._http_request(api_request_url, 'GET', token_header)
 
-            return ''
+            api_response_str = api_response['data'].decode('utf-8')
+            api_response_data = json.loads(api_response_str)
+
+            self.logger.debug(f'Response received, status: {api_response["status"]}')
+            self.logger.debug(f'Response headers: {api_response["headers"]}')
+            self.logger.debug(f'Response data: {api_response_data}')
+
+            if api_response['status'] != 200 or api_response_data.get('err', None):
+                error_message = (
+                    f'Failed to perform API request, URL: {api_request_url}, ' +
+                    f'source: {self.markdown_file_path}'
+                )
+
+                output(error_message, self.quiet)
+
+                self.logger.error(error_message)
+
+                return ''
+
+            self.logger.debug('Storing received response in cache')
+
+            with open(api_response_cache_path, 'w', encoding='utf8') as api_response_cache:
+                api_response_cache.write(api_response_str)
 
         self.logger.debug(f'Parameters to apply to downloaded image: {downloaded_image_params}')
 
@@ -275,14 +308,17 @@ class Preprocessor(BasePreprocessor):
                     image_references.append(image_reference)
 
                 else:
-                    error_message = f'Failed to get path for the image, URL: {image_url}'
+                    error_message = (
+                        f'Failed to get path for the image, URL: {image_url}, ' +
+                        f'source: {self.markdown_file_path}'
+                    )
 
                     output(error_message, self.quiet)
 
                     self.logger.error(error_message)
 
             else:
-                error_message = f'Failed to get URL for the image, ID: {image_id}'
+                error_message = f'Failed to get URL for the image, ID: {image_id}, source: {self.markdown_file_path}'
 
                 output(error_message, self.quiet)
 
@@ -299,16 +335,16 @@ class Preprocessor(BasePreprocessor):
     def apply(self):
         self.logger.info('Applying preprocessor')
 
-        for markdown_file_path in self.working_dir.rglob('*.md'):
-            self.logger.debug(f'Processing the file: {markdown_file_path}')
+        for self.markdown_file_path in self.working_dir.rglob('*.md'):
+            self.logger.debug(f'Processing the file: {self.markdown_file_path}')
 
-            with open(markdown_file_path, encoding='utf8') as markdown_file:
+            with open(self.markdown_file_path, encoding='utf8') as markdown_file:
                 content = markdown_file.read()
 
             processed_content = self.process_figma(content)
 
             if processed_content:
-                with open(markdown_file_path, 'w', encoding='utf8') as markdown_file:
+                with open(self.markdown_file_path, 'w', encoding='utf8') as markdown_file:
                     markdown_file.write(processed_content)
 
         self.logger.info('Preprocessor applied')

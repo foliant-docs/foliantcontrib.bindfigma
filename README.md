@@ -27,6 +27,7 @@ The preprocessor has a number of options with the following default values:
 preprocessors:
     - bindfigma:
         cache_dir: !path .bindfigmacache
+        api_caching: disabled
         convert_path: convert
         caption: ''
         hyperlinks: true
@@ -46,7 +47,10 @@ preprocessors:
 Some values of options specified in the project config may be overridden by tag attributes, see below.
 
 `cache_dir`
-:   Directory to store downloaded and resized images.
+:   Directory to store cached API responses, downloaded and resized images.
+
+`api_caching`
+:   API responses caching mode. Available values: `disabled`—switch off unconditionally; `enabled`—switch on unconditionally; `env`—switch on only if the `FOLIANT_FIGMA_CACHING` environment variable is set, otherwise switch off. If this mode is switched on, the preprocessor caches Figma API responses locally and uses cached data instead of performing API request. In this case, Figma node updating without changing API URL may not take effect.
 
 `convert_path`
 :   Path to `convert` binary, a part of ImageMagick. If resizing is not needed, ImageMagick will not be used.
@@ -85,6 +89,6 @@ Here’s an image from Figma:
 <<figma caption="An optional caption" resize="300" file_key="ABC" ids="node1,node2,node3"></figma>
 ```
 
-You may use tag attributes to override the values of the project config options with the same names. All the options excepting `cache_dir` and `convert_path` may be overridden in this way.
+You may use tag attributes to override the values of the project config options with the same names. All the options excepting `cache_dir`, `api_caching` and `convert_path` may be overridden in this way.
 
 BindFigma preprocessor will replace such statements with local image references. If `ids` refers to more than one image, a set of image references will be generated. Multiple image references will be separated with the string specified as `multi_delimeter`.
