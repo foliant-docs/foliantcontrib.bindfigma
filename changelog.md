@@ -1,3 +1,7 @@
+# 1.0.3
+
+-   Fix bug in caching.
+
 # 1.0.2
 
 -   Add `api_caching` option. Add source Markdown file path to the messages written to STDOUT.

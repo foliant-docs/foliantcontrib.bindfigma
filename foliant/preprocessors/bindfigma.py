@@ -102,8 +102,6 @@ class Preprocessor(BasePreprocessor):
             self.logger.debug(f'Response headers: {download_response["headers"]}')
 
             if download_response['status'] == 200:
-                self._cache_dir_path.mkdir(parents=True, exist_ok=True)
-
                 with open(downloaded_image_path, 'wb') as downloaded_image_file:
                     downloaded_image_file.write(download_response['data'])
 
@@ -274,6 +272,8 @@ class Preprocessor(BasePreprocessor):
                 return ''
 
             self.logger.debug('Storing received response in cache')
+
+            self._cache_dir_path.mkdir(parents=True, exist_ok=True)
 
             with open(api_response_cache_path, 'w', encoding='utf8') as api_response_cache:
                 api_response_cache.write(api_response_str)
