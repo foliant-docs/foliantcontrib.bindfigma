@@ -1,3 +1,5 @@
+[![](https://img.shields.io/pypi/v/foliantcontrib.bindfigma.svg)](https://pypi.org/project/foliantcontrib.bindfigma/) [![](https://img.shields.io/github/v/tag/foliant-docs/foliantcontrib.bindfigma.svg?label=GitHub)](https://github.com/foliant-docs/foliantcontrib.bindfigma)
+
 # BindFigma
 
 BindFigma is a preprocessor that downloads and optionally resizes design layout images from [Figma](https://www.figma.com/), and binds these images with the documentation project.
@@ -81,12 +83,12 @@ Some values of options specified in the project config may be overridden by tag 
 
 ## Usage
 
-To insert a design layout image from Figma into your documentation, use `<<figma>...</figma>` tags in Markdown source:
+To insert a design layout image from Figma into your documentation, use `<figma>...</figma>` tags in Markdown source:
 
 ```markdown
 Here’s an image from Figma:
 
-<<figma caption="An optional caption" resize="300" file_key="ABC" ids="node1,node2,node3"></figma>
+<figma caption="An optional caption" resize="300" file_key="ABC" ids="node1,node2,node3"></figma>
 ```
 
 You may use tag attributes to override the values of the project config options with the same names. All the options excepting `cache_dir`, `api_caching` and `convert_path` may be overridden in this way.
